@@ -98,6 +98,33 @@ def train_and_evaluate(df):
     joblib.dump(best["pipeline"], out_path)
     print(f"Saved best model to {out_path}")
 
+    # Build and save metadata for semantic analysis (TF-IDF centroids per class)
+    try:
+        # Extract fitted vectorizer from pipeline preprocessor
+        vect = best["pipeline"].named_steps["preprocessor"].named_transformers_["text"]
+        # Transform training text to TF-IDF vectors
+        X_text_train = vect.transform(X_train[text_feature])
+        # Compute centroids (mean vector) for each class
+        class_centroids = {}
+        for cls in np.unique(y_train):
+            mask = (y_train == cls).values
+            if mask.sum() > 0:
+                centroid = X_text_train[mask].mean(axis=0)
+                # convert to dense array
+                class_centroids[int(cls)] = np.asarray(centroid).ravel()
+
+        meta = {
+            "class_centroids": class_centroids,
+            "text_feature": text_feature,
+            "numeric_features": numeric_features,
+            "vectorizer_shape": X_text_train.shape,
+        }
+        meta_path = os.path.join(os.getcwd(), "model_meta.pkl")
+        joblib.dump(meta, meta_path)
+        print(f"Saved model metadata to {meta_path}")
+    except Exception as e:
+        print("Warning: could not compute/save model metadata:", e)
+
     return results, best_name
 
 
